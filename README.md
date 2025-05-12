@@ -61,3 +61,8 @@ Daily Brief is a Node.js application designed to summarize daily events from bot
 * Microsoft Graph Client: Integration with Microsoft Outlook Calendar.
 * Luxon: Date and time manipulation.
 * dotenv: Environment variable management.
+
+## Build Commands
+
+* `docker buildx build --platform linux/amd64 -t harbor.maax.gr/grossmax/daily-brief -f docker/Dockerfile .`
+* `docker push harbor.maax.gr/grossmax/daily-brief:latest`

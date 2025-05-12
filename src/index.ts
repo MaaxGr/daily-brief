@@ -1,6 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
-import express, { Request, Response } from 'express';
+import express, { Request, Response, NextFunction, RequestHandler } from 'express';
 import { GoogleAuthClient } from './GoogleAuthClient';
 import { MSAuthClient } from './MSAuthClient';
 import { EventLoader } from './EventLoader';
@@ -16,6 +16,45 @@ const googleAuthClient = new GoogleAuthClient();
 const msAuthClient = new MSAuthClient();
 const eventLoader = new EventLoader(msAuthClient, googleAuthClient);
 
+
+
+const basicAuth = (): RequestHandler => {
+    return (req: Request, res: Response, next: NextFunction): void => {
+
+        console.log("Middleware Request path:", req.path);
+
+        const excludedPaths = ['/auth/callback', '/auth/entra/callback'];
+        if (excludedPaths.includes(req.path)) {
+            return next(); // Skip authentication for excluded paths
+        }
+
+        const authHeader = req.headers.authorization;
+
+        if (!authHeader || !authHeader.startsWith('Basic ')) {
+            res.setHeader('WWW-Authenticate', 'Basic');
+            res.status(401).send('Authentication required.');
+            return;
+        }
+
+        const base64Credentials = authHeader.split(' ')[1];
+        const credentials = Buffer.from(base64Credentials, 'base64').toString('utf-8');
+        const [user, pass] = credentials.split(':');
+
+        const validUsername = process.env.BASIC_AUTH_USERNAME!;
+        const validPassword = process.env.BASIC_AUTH_PASSWORD!;
+
+        if (user === validUsername && pass === validPassword) {
+            return next();
+        }
+
+        res.setHeader('WWW-Authenticate', 'Basic');
+        res.status(401).send('Invalid credentials.');
+        return;
+    };
+};
+
+
+app.use(basicAuth());
 
 app.get("/authorize/microsoft", async (_req, res) => {
     res.redirect(msAuthClient.getAuthorizeUrl());
@@ -150,4 +189,9 @@ app.listen(port, async () => {
     await googleAuthClient.authenticateSilent();
     await msAuthClient.readTokensFromFile();
 });
+
+
+if (!process.env.BASIC_AUTH_USERNAME || !process.env.BASIC_AUTH_PASSWORD) {
+    throw new Error("❌ BASIC_AUTH_USERNAME and BASIC_AUTH_PASSWORD must be set in the environment variables.");
+}
 
