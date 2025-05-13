@@ -23,6 +23,9 @@ export class EventLoader {
                 let endDate = new Date(end);
                 endDate.setDate(endDate.getDate() - 1); // -1 Tag
                 end = endDate.toISOString().split('T')[0]
+            } else {
+                start = DateTime.fromISO(start, { zone: process.env.TZ }).toFormat("yyyy-MM-dd'T'HH:mm:ss");
+                end = DateTime.fromISO(end, { zone: process.env.TZ }).toFormat("yyyy-MM-dd'T'HH:mm:ss");
             }
 
             return {
@@ -36,7 +39,19 @@ export class EventLoader {
     extractMSEventData(events: any[]) {
         return events.map(e => {
             const startUTC = DateTime.fromISO(e.start.dateTime, { zone: 'utc' });
-            const endUTC = DateTime.fromISO(e.end.dateTime, { zone: 'utc' });
+            let endUTC = DateTime.fromISO(e.end.dateTime, { zone: 'utc' });
+
+            console.log(e.isAllDay)
+            const isAllDay = e.isAllDay === true;
+            let start = startUTC.setZone(process.env.TZ).toFormat("yyyy-MM-dd'T'HH:mm:ss");
+            let end = endUTC.setZone(process.env.TZ).toFormat("yyyy-MM-dd'T'HH:mm:ss");
+
+            if (isAllDay && endUTC != null) {
+                endUTC = endUTC.minus({ days: 1 });
+                end = endUTC.toISO()!!.split('T')[0]
+                start = startUTC.toISO()!!.split('T')[0]
+            }
+
 
             const location = e.location.displayName;
             const attendees = e.attendees
@@ -46,8 +61,8 @@ export class EventLoader {
 
             return {
                 title: e.subject,
-                start: startUTC.setZone('Europe/Berlin').toISO({ suppressMilliseconds: true }),
-                end: endUTC.setZone('Europe/Berlin').toISO({ suppressMilliseconds: true }),
+                start: start,
+                end: end,
                 location: location,
                 attendees: attendees
             };
@@ -61,13 +76,13 @@ export class EventLoader {
         const client = await this.msAuthClient.getMSGraphClient(token);
 
         const now = DateTime.now().setZone(process.env.TZ);
-        const startIso = now.startOf("day").toUTC().toISO()!;
-        const endIso = now.endOf("day").toUTC().toISO()!;
+        const startIso = now.toUTC().startOf("day").toISO()!;
+        const endIso = now.toUTC().endOf("day").toISO()!;
 
         const events = await client
             .api("/me/calendarview")
             .query({ startDateTime: startIso, endDateTime: endIso })
-            .select("subject,start,end,location,attendees")
+            .select("subject,start,end,location,attendees,isAllDay")
             .orderby("start/dateTime")
             .get();
 
